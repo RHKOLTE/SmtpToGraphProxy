@@ -1,5 +1,7 @@
 # SmtpToGraphProxy
 This is SMTP server based on SubEtha SMTP is a Java library for receiving SMTP mail and sending them to Microsoft 365 modern authentication server.
+Manually download the jar microsoft-graph-6.41.0.jar and keep it in the lib folder.
+https://mvnrepository.com/artifact/com.microsoft.graph/microsoft-graph/6.41.0
 
 How to test.
 Create a Send-MailMessageSMTP.ps1 file with below inputs.
