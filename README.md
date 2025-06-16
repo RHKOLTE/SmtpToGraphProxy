@@ -7,10 +7,10 @@ How to test.
 Create a Send-MailMessageSMTP.ps1 file with below inputs.
 If the SmtpToGraphProxy is running the below powershell script wll conect to the SmtpToGraphProxy and try to send an email.
 If the corrosponding to and cc and bcc user must receive the email with attachments.
-# Skip SSL certificate validation to avoid certificate errors
+/# Skip SSL certificate validation to avoid certificate errors
 [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
 
-# Define email parameters
+/# Define email parameters
 $smtpServer = "localhost"
 $smtpPort = 2525
 $username = "notification@xyzcorp.com"
@@ -19,7 +19,7 @@ $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
 $cred = New-Object System.Management.Automation.PSCredential($username, $securePassword)
 $attachments = @("C:\test\dummy.pdf", "C:\test\dummy1.pdf")
 
-# Send the email
+/# Send the email
 Send-MailMessage `
     -From "gl-notification@greenlightcorp.com" `
     -To "user1@xyzcorp.com" `
