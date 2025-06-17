@@ -9,14 +9,16 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import javax.mail.BodyPart;
 import javax.mail.Multipart;
 import javax.mail.Part;
 import javax.mail.internet.MimeMessage;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.azure.identity.ClientSecretCredential;
+import com.azure.identity.ClientSecretCredentialBuilder;
 import com.azure.identity.UsernamePasswordCredential;
 import com.azure.identity.UsernamePasswordCredentialBuilder;
 import com.microsoft.graph.models.Attachment;
@@ -31,21 +33,32 @@ import com.microsoft.graph.users.item.sendmail.SendMailPostRequestBody;
 
 @SuppressWarnings("deprecation")
 public class GraphEmailSender {
-	
-	private final static Logger log = LoggerFactory.getLogger(GraphEmailSender.class);
-	
-	private static GraphServiceClient graphClient;
 
-	public static void init(String clientId, String tenantId, String username, String password) {
-		UsernamePasswordCredential credential = new UsernamePasswordCredentialBuilder().clientId(clientId)
-				.tenantId(tenantId).username(username).password(password).build();
-		// Create Graph client with the correct SDK v6+ constructor
-		String[] scopes = { "https://graph.microsoft.com/.default" };
-		graphClient = new GraphServiceClient(credential, scopes);
-		log.info("GraphServiceClient init done");
+	private final static Logger log = LoggerFactory.getLogger(GraphEmailSender.class);
+
+	private static GraphServiceClient graphClient;
+	private static String LCredentialType;
+	final static String[] scopes = new String[] { "https://graph.microsoft.com/.default" };
+
+	public static void init(String clientId, String clientSec, String tenantId, String username, String password,
+			String CredentialType) {
+		LCredentialType = CredentialType;
+		if (CredentialType.equalsIgnoreCase("ClientSecretCredential")) {
+			ClientSecretCredential credential = new ClientSecretCredentialBuilder().clientId(clientId)
+					.tenantId(tenantId).clientSecret(clientSec).build();
+			graphClient = new GraphServiceClient(credential, scopes);
+			log.info("GraphServiceClient init done ClientSecretCredential");
+		} else if ("UsernamePasswordCredential".equalsIgnoreCase(CredentialType)) {
+			UsernamePasswordCredential credential = new UsernamePasswordCredentialBuilder().clientId(clientId)
+					.tenantId(tenantId).username(username).password(password).build();
+			// Create Graph client with the correct SDK v6+ constructor
+			graphClient = new GraphServiceClient(credential, scopes);
+			log.info("GraphServiceClient init done UsernamePasswordCredential");
+		}
 	}
 
-	public static void sendEmail(String from, List<String> envelopeRecipients, MimeMessage mimeMessage) throws Exception {
+	public static void sendEmail(String from, List<String> envelopeRecipients, MimeMessage mimeMessage)
+			throws Exception {
 		log.info("GraphServiceClient trying to sendEmail");
 		Message graphMessage = new Message();
 
@@ -66,11 +79,12 @@ public class GraphEmailSender {
 		graphMessage.setToRecipients(convertAddresses(mimeMessage.getRecipients(javax.mail.Message.RecipientType.TO)));
 		graphMessage.setCcRecipients(convertAddresses(mimeMessage.getRecipients(javax.mail.Message.RecipientType.CC)));
 
-	    // Collect all "To" and "Cc" addresses to exclude from Bcc
-	    List<Recipient> toRecipients = convertAddresses(mimeMessage.getRecipients(javax.mail.Message.RecipientType.TO));
-	    List<Recipient> ccRecipients = convertAddresses(mimeMessage.getRecipients(javax.mail.Message.RecipientType.CC));
-	    log.debug("GraphServiceClient BCC list"+getBccRecipients(toRecipients,ccRecipients,envelopeRecipients).toString());
-	    graphMessage.setBccRecipients(getBccRecipients(toRecipients,ccRecipients,envelopeRecipients));
+		// Collect all "To" and "Cc" addresses to exclude from Bcc
+		List<Recipient> toRecipients = convertAddresses(mimeMessage.getRecipients(javax.mail.Message.RecipientType.TO));
+		List<Recipient> ccRecipients = convertAddresses(mimeMessage.getRecipients(javax.mail.Message.RecipientType.CC));
+		log.debug("GraphServiceClient BCC list"
+				+ getBccRecipients(toRecipients, ccRecipients, envelopeRecipients).toString());
+		graphMessage.setBccRecipients(getBccRecipients(toRecipients, ccRecipients, envelopeRecipients));
 
 		// Attachments
 		List<Attachment> attachments = extractAttachments(mimeMessage);
@@ -81,16 +95,21 @@ public class GraphEmailSender {
 		SendMailPostRequestBody sendMailBody = new SendMailPostRequestBody();
 		sendMailBody.setMessage(graphMessage);
 		sendMailBody.setSaveToSentItems(false);
-		log.debug("GraphServiceClient trying to send message sendMailBody "+sendMailBody.toString());
+
+		log.debug("GraphServiceClient trying to send message sendMailBody " + sendMailBody.toString());
 		// Send message using the correct API
 		try {
-			graphClient.me().sendMail().post(sendMailBody);
-        } catch (Exception ex) {
-            // Optional: log here
-        	log.info("Error sending email: {}", ex.toString(), ex);  // Logs stack trace
-            throw ex; // rethrow
-        }		
-		
+			if (LCredentialType.equalsIgnoreCase("ClientSecretCredential")) {
+				graphClient.users().byUserId(from).sendMail().post(sendMailBody);
+			} else {
+				graphClient.me().sendMail().post(sendMailBody);
+			}
+		} catch (Exception ex) {
+			// Optional: log here
+			log.info("Error sending email: {}", ex.toString(), ex); // Logs stack trace
+			throw ex; // rethrow
+		}
+
 		log.info("GraphServiceClient sendEmail done");
 	}
 
@@ -136,64 +155,62 @@ public class GraphEmailSender {
 			return recipient;
 		}).collect(Collectors.toList());
 	}
-    public static List<String> extractEmailAddresses(List<Recipient> recipients) {
-        List<String> emailList = new ArrayList<String>();
-        for (int i = 0; i < recipients.size(); i++) {
-            Recipient r = recipients.get(i);
-            if (r != null && r.getEmailAddress() != null && r.getEmailAddress().getAddress() != null) {
-                emailList.add(r.getEmailAddress().getAddress());
-            }
-        }
-        return emailList;
-    }
-    
-    public static List<Recipient> getBccRecipients(
-            List<Recipient> toRecipients,
-            List<Recipient> ccRecipients,
-            List<String> envelopeRecipients
-    ) {
-        Set<String> toCcEmails = new HashSet<String>();
 
-        // Collect TO email addresses
-        for (int i = 0; i < toRecipients.size(); i++) {
-            Recipient r = toRecipients.get(i);
-            if (r != null && r.getEmailAddress() != null && r.getEmailAddress().getAddress() != null) {
-                toCcEmails.add(r.getEmailAddress().getAddress().toLowerCase());
-            }
-        }
+	public static List<String> extractEmailAddresses(List<Recipient> recipients) {
+		List<String> emailList = new ArrayList<String>();
+		for (int i = 0; i < recipients.size(); i++) {
+			Recipient r = recipients.get(i);
+			if (r != null && r.getEmailAddress() != null && r.getEmailAddress().getAddress() != null) {
+				emailList.add(r.getEmailAddress().getAddress());
+			}
+		}
+		return emailList;
+	}
 
-        // Collect CC email addresses
-        for (int i = 0; i < ccRecipients.size(); i++) {
-            Recipient r = ccRecipients.get(i);
-            if (r != null && r.getEmailAddress() != null && r.getEmailAddress().getAddress() != null) {
-                toCcEmails.add(r.getEmailAddress().getAddress().toLowerCase());
-            }
-        }
+	public static List<Recipient> getBccRecipients(List<Recipient> toRecipients, List<Recipient> ccRecipients,
+			List<String> envelopeRecipients) {
+		Set<String> toCcEmails = new HashSet<String>();
 
-        // Identify BCC email addresses
-        List<String> bccEmails = new ArrayList<String>();
-        for (int i = 0; i < envelopeRecipients.size(); i++) {
-            String email = envelopeRecipients.get(i);
-            if (email != null && !toCcEmails.contains(email.toLowerCase())) {
-                bccEmails.add(email);
-            }
-        }
+		// Collect TO email addresses
+		for (int i = 0; i < toRecipients.size(); i++) {
+			Recipient r = toRecipients.get(i);
+			if (r != null && r.getEmailAddress() != null && r.getEmailAddress().getAddress() != null) {
+				toCcEmails.add(r.getEmailAddress().getAddress().toLowerCase());
+			}
+		}
 
-        // Create Recipient objects for BCC
-        List<Recipient> bccRecipients = new ArrayList<Recipient>();
-        for (int i = 0; i < bccEmails.size(); i++) {
-            String email = bccEmails.get(i);
-            Recipient recipient = new Recipient();
-            EmailAddress emailAddr = new EmailAddress();
-            emailAddr.setAddress(email);
-            recipient.setEmailAddress(emailAddr); 
-            bccRecipients.add(recipient);
-        }
+		// Collect CC email addresses
+		for (int i = 0; i < ccRecipients.size(); i++) {
+			Recipient r = ccRecipients.get(i);
+			if (r != null && r.getEmailAddress() != null && r.getEmailAddress().getAddress() != null) {
+				toCcEmails.add(r.getEmailAddress().getAddress().toLowerCase());
+			}
+		}
 
-        return bccRecipients;
-    }
-    
-    private static List<Attachment> extractAttachments(MimeMessage message) throws Exception {
+		// Identify BCC email addresses
+		List<String> bccEmails = new ArrayList<String>();
+		for (int i = 0; i < envelopeRecipients.size(); i++) {
+			String email = envelopeRecipients.get(i);
+			if (email != null && !toCcEmails.contains(email.toLowerCase())) {
+				bccEmails.add(email);
+			}
+		}
+
+		// Create Recipient objects for BCC
+		List<Recipient> bccRecipients = new ArrayList<Recipient>();
+		for (int i = 0; i < bccEmails.size(); i++) {
+			String email = bccEmails.get(i);
+			Recipient recipient = new Recipient();
+			EmailAddress emailAddr = new EmailAddress();
+			emailAddr.setAddress(email);
+			recipient.setEmailAddress(emailAddr);
+			bccRecipients.add(recipient);
+		}
+
+		return bccRecipients;
+	}
+
+	private static List<Attachment> extractAttachments(MimeMessage message) throws Exception {
 		List<Attachment> graphAttachments = new ArrayList<>();
 		if (!message.isMimeType("multipart/*"))
 			return graphAttachments;
@@ -208,7 +225,7 @@ public class GraphEmailSender {
 				byte[] data = new byte[4096];
 				int nRead;
 				while ((nRead = is.read(data, 0, data.length)) != -1) {
-				    buffer.write(data, 0, nRead);
+					buffer.write(data, 0, nRead);
 				}
 
 				buffer.flush();
