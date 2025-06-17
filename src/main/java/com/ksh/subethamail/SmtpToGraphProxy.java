@@ -45,9 +45,11 @@ public class SmtpToGraphProxy {
             System.out.println("Done loadConfig");
             GraphEmailSender.init(
                 config.getProperty("o365.clientId"),
+                config.getProperty("o365.clientSec"),
                 config.getProperty("o365.tenantId"),
                 config.getProperty("o365.username"),
-                config.getProperty("o365.password")
+                config.getProperty("o365.password"),
+                config.getProperty("o365.CredentialType")
             );
             log.info("Graph client init done");
             System.out.println("Done GraphEmailSender.init");
@@ -166,7 +168,8 @@ public class SmtpToGraphProxy {
                 GraphEmailSender.sendEmail(from, recipients, mimeMessage);
                 log.info("Successfully sent email from {}", from);
             } catch (Exception ex) {
-                log.error("Failed to process/send email", ex);
+                log.error("Failed to send email", ex);
+                System.out.println("Failed to send email using Graph for user:"+from);
                 throw new RejectException(554, "Failed to send email: " + ex.getMessage());
             }
         }
