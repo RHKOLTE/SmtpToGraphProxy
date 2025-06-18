@@ -21,6 +21,7 @@ import org.subethamail.smtp.MessageHandlerFactory;
 import org.subethamail.smtp.RejectException;
 import org.subethamail.smtp.server.SMTPServer;
 
+import com.ksh.subethamail.util.ConfigUtils;
 import com.ksh.subethamail.util.GraphEmailSender;
 import com.ksh.subethamail.util.MimeMessageLogger;
 import com.ksh.subethamail.util.MyCustomSSLFactory;
@@ -33,15 +34,22 @@ public class SmtpToGraphProxy {
     public static void main(String[] args) {
         log.info("Starting SmtpToGraphProxy");
         System.out.println("Starting SmtpToGraphProxy");
-        String configFilePath = parseArgs(args);
-        if (configFilePath == null) {
-            log.error("Configuration file path not provided. Use -config <path>");
-            System.out.println("Configuration file path not provided. Use -config <path>");
+        String configFilePath = "";
+        Properties config=null;
+        try {
+            configFilePath = ConfigUtils.parseArgs(args);
+            if (configFilePath == null) {
+                System.err.println("Missing -config argument");
+                System.exit(1);
+            }
+
+            config = ConfigUtils.loadConfig(configFilePath);
+            // Continue with your app logic...
+        } catch (Exception e) {
+            e.printStackTrace();
             System.exit(1);
         }
-
         try {
-            Properties config = loadConfig(configFilePath);
             System.out.println("Done loadConfig");
             GraphEmailSender.init(
                 config.getProperty("o365.clientId"),
@@ -49,7 +57,8 @@ public class SmtpToGraphProxy {
                 config.getProperty("o365.tenantId"),
                 config.getProperty("o365.username"),
                 config.getProperty("o365.password"),
-                config.getProperty("o365.CredentialType")
+                config.getProperty("o365.CredentialType"),
+                config.getProperty("o365.SaveToSentItems")
             );
             log.info("Graph client init done");
             System.out.println("Done GraphEmailSender.init");
@@ -61,31 +70,10 @@ public class SmtpToGraphProxy {
             server.start();
             System.out.println("Done SMTPServer started on port:" +config.getProperty("smtp.port"));
             log.info("SMTP to Graph Proxy is running on port {}", config.getProperty("smtp.port"));
-        } catch (IOException e) {
+        } catch (Exception e) {
             log.error("Failed to start proxy: {}", e.getMessage(), e);
             System.exit(2);
         }
-    }
-
-    private static String parseArgs(String[] args) {
-        for (int i = 0; i < args.length - 1; i++) {
-            if ("-config".equals(args[i])) {
-                log.info("Using config file: {}", args[i + 1]);
-                return args[i + 1];
-            }
-        }
-        return null;
-    }
-
-    private static Properties loadConfig(String fileName) throws IOException {
-        Properties props = new Properties();
-        try (InputStream input = Thread.currentThread().getContextClassLoader().getResourceAsStream(fileName)) {
-            if (input == null) {
-                throw new FileNotFoundException("Properties file not found in classpath: " + fileName);
-            }
-            props.load(input);
-        }
-        return props;
     }
 
     private static SMTPServer initializeSmtpServer(Properties config) {

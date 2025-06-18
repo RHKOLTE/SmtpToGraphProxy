@@ -39,10 +39,11 @@ public class GraphEmailSender {
 	private static GraphServiceClient graphClient;
 	private static String LCredentialType;
 	final static String[] scopes = new String[] { "https://graph.microsoft.com/.default" };
-
+	private static boolean  BSaveToSentItems = false;
 	public static void init(String clientId, String clientSec, String tenantId, String username, String password,
-			String CredentialType) {
+			String CredentialType, String SaveToSentItems) {
 		LCredentialType = CredentialType;
+		BSaveToSentItems = Boolean.parseBoolean(SaveToSentItems);
 		if (CredentialType.equalsIgnoreCase("ClientSecretCredential")) {
 			ClientSecretCredential credential = new ClientSecretCredentialBuilder().clientId(clientId)
 					.tenantId(tenantId).clientSecret(clientSec).build();
@@ -94,7 +95,7 @@ public class GraphEmailSender {
 		// Create send mail parameter set
 		SendMailPostRequestBody sendMailBody = new SendMailPostRequestBody();
 		sendMailBody.setMessage(graphMessage);
-		sendMailBody.setSaveToSentItems(false);
+		sendMailBody.setSaveToSentItems(BSaveToSentItems);
 
 		log.debug("GraphServiceClient trying to send message sendMailBody " + sendMailBody.toString());
 		// Send message using the correct API
