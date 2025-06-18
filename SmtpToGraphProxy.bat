@@ -3,10 +3,11 @@ setlocal enabledelayedexpansion
 
 :: Check if command argument is provided
 if "%1"=="" (
-    echo Usage: %0 [Start^|Stop^|Status]
-    echo   Start  - Start the SMTP to Graph Proxy service
-    echo   Stop   - Stop the SMTP to Graph Proxy service
-    echo   Status - Check if the service is running
+    echo Usage: %0 [Start^|Stop^|Status^|GetCode]
+    echo   Start   - Start the SMTP to Graph Proxy service
+    echo   Stop    - Stop the SMTP to Graph Proxy service
+    echo   Status  - Check if the service is running
+	echo   GetCode - Run DeviceCodeAuth to perform interactive MFA
     exit /b 1
 )
 
@@ -32,6 +33,7 @@ for %%i in (A B C D E F G H I J K L M N O P Q R S T U V W X Y Z) do call set "CO
 if /i "%COMMAND%"=="START" goto :StartService
 if /i "%COMMAND%"=="STOP" goto :StopService
 if /i "%COMMAND%"=="STATUS" goto :StatusService
+if /i "%COMMAND%"=="GETCODE" goto :GetCode
 
 echo Invalid command: %1
 echo Usage: %0 [Start^|Stop^|Status]
@@ -61,7 +63,7 @@ echo ------------------------------------------------ >> "%LOG_FILE%"
 echo Starting Java application...
 start "%APP_NAME%" /min "%JAVA_HOME%\bin\javaw" -Dapp.name=%APP_NAME% -classpath "%JARS%" com.ksh.subethamail.SmtpToGraphProxy -config config.properties
 :: Wait for the application to start
-timeout /t 10 >nul
+timeout /t 20 >nul
 
 :: Get the PID of the started process
 call :GetProcessPID
@@ -106,6 +108,23 @@ if not "!found_pid!"=="" (
 ) else (
     echo [INFO] Server is not running
 )
+goto :RestorePath
+
+:GetCode
+ echo Running DeviceCodeAuth to retrieve device login code...
+:: Build classpath
+call :BuildClasspath
+
+:: Echo the classpath info
+echo Using classpath: >> "%LOG_FILE%"
+echo %JARS% >> "%LOG_FILE%"
+echo ------------------------------------------------ >> "%LOG_FILE%"
+
+:: Start the application
+echo Starting Java application...
+"%JAVA_HOME%\bin\java" -Dapp.name=%APP_NAME% -classpath "%JARS%" com.ksh.subethamail.util.DeviceCodeAuth -config config.properties
+:: Wait for the application to start
+timeout /t 10 >nul
 goto :RestorePath
 
 :GetProcessPID
