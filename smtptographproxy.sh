@@ -6,11 +6,12 @@ if [ $# -eq 0 ]; then
     echo "  start  - Start the SMTP to Graph Proxy service"
     echo "  stop   - Stop the SMTP to Graph Proxy service"
     echo "  status - Check if the service is running"
+    echo "  getcode  - Run DeviceCodeAuth to perform interactive MFA"
     exit 1
 fi
 
 # Set configuration variables - adjust Java path for your Linux system
-export JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64"
+export JAVA_HOME="../openjdk"
 export OLDPATH="$PATH"
 export PATH="$JAVA_HOME/bin:$OLDPATH"
 
@@ -124,6 +125,11 @@ status_service() {
     fi
 }
 
+get_code() {
+    echo "Running DeviceCodeAuth to retrieve device login code..."
+    build_classpath
+    "$JAVA_HOME/bin/java" -classpath "$JARS" com.ksh.subethamail.util.DeviceCodeAuth -config config.properties
+}
 # Convert command to lowercase for case-insensitive comparison
 COMMAND=$(echo "$1" | tr '[:upper:]' '[:lower:]')
 
@@ -138,9 +144,12 @@ case "$COMMAND" in
     status)
         status_service
         ;;
+    getcode)
+        get_code
+        ;;
     *)
         echo "Invalid command: $1"
-        echo "Usage: $0 [start|stop|status]"
+        echo "Usage: $0 [start|stop|status|getcode]"
         exit 1
         ;;
 esac
